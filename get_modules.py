@@ -8,7 +8,7 @@ from urllib import request
 
 import json, time
 
-SEMESTER = 'ss19' # format: ssXX or wsXXXX
+SEMESTER = 'ss20' # format: ssXX or wsXXXX
 FILE_PREFIX = 'data/all_modules_' + SEMESTER
 FILE_SUFFIX = '.json'
 FILENAME = FILE_PREFIX + FILE_SUFFIX
@@ -20,15 +20,12 @@ def main():
     if not do_backup in ['n', 'N']:
         backup()
 
-    browser = webdriver.Chrome()
+    browser = webdriver.Firefox()
     browser.get('https://moseskonto.tu-berlin.de/moses/modultransfersystem/bolognamodule/suchen.html')
 
-    ss19_element = WebDriverWait(browser, 10).until(
-        EC.presence_of_element_located((By.XPATH, """//*[@id="j_idt103:headpanel"]/div[3]/div[1]/div/select/option[2]""")))
-    ss19_element.click()
-
-    search_element = WebDriverWait(browser, 10).until(
-        EC.presence_of_element_located((By.XPATH, """//*[@id="j_idt103:headpanel"]/div[2]/div/div/div/input""")))
+    select_element = WebDriverWait(browser, 10).until(
+        EC.presence_of_element_located((By.XPATH, """/html/body/span[1]/main/div/form/span/div[3]/div[1]/div/select/option[2]""")))
+    select_element.click()
 
     check_characters(browser)
     check_words(browser)
@@ -44,15 +41,16 @@ def check_characters(browser):
             last_char = f.read()
         char_found = False
     except FileNotFoundError:
-            char_found = True
+        last_char = ''
+        char_found = True
 
     for char1 in all_chars:
         for char2 in all_chars:
             if (char1 == last_char) or (char1 + char2 == last_char):
                 char_found = True
             try:
-                if char_found and not last_char != 'z':
-                    check_string(char1+char2, browser)
+                if char_found and not last_char == 'z':
+                    check_string(char1 + char2, browser)
             except TimeoutException:
                 continue
             except StaleElementReferenceException:
@@ -91,8 +89,6 @@ def check_words(browser):
         except StaleElementReferenceException:
             browser.refresh()
             continue
-        except HTTPError:
-            break
 
 
 def get_pform():
@@ -137,7 +133,8 @@ def check_string(string, browser):
         with open('data/checking_word.txt', 'w') as f:
             f.write(string)
 
-    search_element = browser.find_element(By.XPATH, """//*[@id="j_idt103:headpanel"]/div[2]/div/div/div/input""")
+    search_element = browser.find_element(
+        By.XPATH, """/html/body/span[1]/main/div/form/span/div[2]/div/div/div/input""")
     search_element.clear()
     search_element.send_keys(string)
 
@@ -150,17 +147,19 @@ def check_string(string, browser):
     except:
         all_modules = {}
 
+    erg_liste_css = """#j_idt105\:ergebnisliste_data"""
     try:
         find_modules_element = WebDriverWait(browser, 2).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, """#j_idt103\\3a ergebnisliste_data""")))
+            EC.presence_of_element_located((By.CSS_SELECTOR, erg_liste_css)))
     except TimeoutException:
-        print('Some kind of connection issue... Skipping to Prüfungsform.')
+        print('Some kind of connection issue...')
         return
 
     i = 0
     while True:
         try:
-            module_element = browser.find_element(By.XPATH, """//*[@id="j_idt103:ergebnisliste_data"]/tr[""" + str(i+1) + """]""")
+            module_element = browser.find_element(
+                By.CSS_SELECTOR, f'tr.ui-widget-content:nth-child({i + 1})')
             module_id = module_element.find_element(By.CSS_SELECTOR, 'td:nth-child(1)').text
             try:
                 any(all_modules['module_no_' + str(module_id)])
@@ -202,11 +201,14 @@ def get_pruefungsform(link):
 
 def backup():
     print('Backing up...')
-    with open(FILENAME, 'r') as f:
-        all_data = json.load(f)
-    with open(FILE_PREFIX + '_backup' + FILE_SUFFIX, 'w') as f:
-        f.write(json.dumps(all_data, indent=4))
-    print('Done!')
+    try:
+        with open(FILENAME, 'r') as f:
+            all_data = json.load(f)
+        with open(FILE_PREFIX + '_backup' + FILE_SUFFIX, 'w') as f:
+            f.write(json.dumps(all_data, indent=4))
+        print('Done!')
+    except:
+        print('File probably not found. Could not back up.')
 
 
 def filter_pform(pform_raw):
